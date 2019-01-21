@@ -231,7 +231,8 @@ Si reducimos el soporte a 0.0001 (que implica prácticamente que queremos contar
 los itemsets que ocurren), obtenemos:
 
 ```{r gigante}
-pars_2 <- list(supp = 0.0001, target='frequent itemsets', maxtime = 0, maxlen = 7)
+#supp was changes from 0.0001 to 0.01
+pars_2 <- list(supp = 0.001, target='frequent itemsets', maxtime = 0, maxlen = 6)
 ap_todos <- apriori(lista_mb, parameter = pars_2)
 ```
 
@@ -658,6 +659,7 @@ de canastas que contienen $j$.
 ```
 
 En nuestro ejemplo, veamos dos reglas con interés muy distinto:
+**Note** Si Lift es mayor que 1 indica que hay asociación positiva
 ```{r}
 df_1 <- arrange(df_1, desc(lift))
 df_1[c(4, nrow(df_1)),] %>% select(LHS, RHS, lhs.support, confidence, lift)
@@ -763,7 +765,7 @@ sims_reglas <- lapply(1:10, function(i){
   trans <- simular_transacciones(nItems = 169, 
       nTrans = 10000, iprob = probs_items)
   ap_random <- apriori(trans, 
-      parameter = list(support=0.002, confidence = 0.0, 
+      parameter = list(support=0.002, confidence = 0.0, #confidence 0 indica que no filtramos nada
                      target='rules', ext = TRUE, minlen = 2),
       control = list(verbose = FALSE))
   ap_random
@@ -776,6 +778,7 @@ en las estimaciones del confianza y lift. En este caso utilizamos
 ```{r, warning=FALSE}
 plot(subset(sims_reglas[[4]], rhs %pin% 'whole milk'), 
     measure=c('support','confidence'), shading = 'lift', engine = 'plotly')
+#La curva va disminuyendo a una tasa 1/(n^1/2)
 ```
 
 ```{r, warning=FALSE}
