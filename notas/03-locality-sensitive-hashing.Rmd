@@ -333,6 +333,11 @@ imprimir_texto(lsh_agrupados$docs[[255]])
 **Ejercicio**: explora más los grupos creados por las cubetas. Observa que pares
 similares dados pueden ocurrir en más de una cubeta (pares repetidos)
 
+```{r}
+imprimir_texto(lsh_agrupados$docs[1102])
+sum(lsh_agrupados$docs[[]])
+```
+
 
 ### Creación de pares candidatos y falsos positivos {-}
 

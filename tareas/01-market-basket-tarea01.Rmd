@@ -1,0 +1,79 @@
+---
+title: "01-market-basket-tarea"
+author: "Soledad Perez"
+date: "27/1/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+library(arules)
+library(arulesViz)
+library(tidyverse)
+library(purrr)
+```
+
+
+1. Considera los datos de *datos/recetas*. Lee los datos, asegúrate
+que puedes filtrar por tipo de cocina, y que puedes aplicarles
+la función *apriori* de *arules* (o cualquier otra herramienta que 
+estés utilizando). Calcula la frecuencia de todos los artículos (ingredientes). **El resto de este ejercicio lo haremos a principio
+de la siguiente clase**. Acerca de los datos: Cada receta es una canasta, y los
+artículos son los ingredientes que usan. Puedes consultar el artículo
+original [aquí](https://www.nature.com/articles/srep00196.pdf).
+
+
+```{r}
+recetas <- read.csv("../datos/recetas/srep00196-s3.csv")
+#recetas <- data.frame(recetas)
+head(recetas)
+#class(recetas) --"data.frame"
+```
+```{r}
+#xy.list <- split(xy.df, seq(nrow(xy.df)))
+#ldf = lapply(as.list(1:dim(df)[1]), function(x) df[x[1],])
+#flatten(by_row(xy.df, ..f = function(x) flatten_chr(x), .labels = FALSE))
+ldf <- flatten(by_row(recetas, ..f = function(x) flatten_chr(x), .labels = FALSE))
+```
+
+
+
+```{r}
+#is.na(recetas)
+rec_cols <- is.na(recetas)
+head(rec_cols)
+```
+
+```{r}
+#list_recetas <- as.list(as.data.frame(t(recetas)))
+#list_recetas[[1]]
+#list_recetas[[5]]
+```
+
+```{r}
+list_recetas_2 <- as(t(recetas),'list')
+```
+
+```{r}
+list_recetas_2 <- as(as.data.frame(t(recetas),na.rm=TRUE),'list')
+```
+
+
+```{r}
+sprintf("Número de canastas: %s", length(list_recetas))
+num_items <- sapply(list_recetas, lengths)
+sprintf("Promedio de artículos por canasta: %.3f", mean(num_items))
+##qplot(num_items, binwidth=100)
+num_items
+```
+
+
+2. Haz algunos experimentos el ejemplo \@ref(ejemplo-canastas) que vimos
+en clase: incrementa/decrementa hyperlift, incrementa/decrementa 
+soporte. ¿Qué pasa con las gráficas resultantes y el número de reglas?
+
+3. (Opcional) Muchas veces el análisis de canastas puede hacerse
+con una muestra de transacciones. Leer secciones 6.4.1 a 6.4.4 de [@mmd].

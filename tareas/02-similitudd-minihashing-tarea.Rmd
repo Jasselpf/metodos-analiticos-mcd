@@ -1,0 +1,349 @@
+---
+title: "02-similitud-minihashin-tarea"
+author: "Soledad_Perez"
+date: "10/2/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Tarea {-}
+
+### Ejercicio 1 {-}
+
+1. Calcula la similitud de Jaccard de las cadenas "Este es el ejemplo 1" y "Este es el ejemplo 2", usando tejas de tamaño $3$.
+```{r}
+textos <- character(2)
+textos[1] <- 'Este es el ejemplo 1'
+textos[2] <- 'Este es el ejemplo 2'
+```
+
+
+```{r, collapse = TRUE, warning=FALSE, message=FALSE}
+library(tidyverse)
+
+sim_jaccard <- function(a, b){
+    length(intersect(a, b)) / length(union(a, b))
+}
+
+shingle_chars <- function(string, k, lowercase = FALSE){
+    tokenizers::tokenize_character_shingles(string, n = k, lowercase = FALSE,
+        simplify = TRUE, strip_non_alphanum = FALSE)
+}
+
+tejas_doc_4 <- map(textos, shingle_chars, k = 4)
+sim_jaccard(tejas_doc_4[[1]], tejas_doc_4[[2]])
+tejas_doc_6 <- map(textos, shingle_chars, k = 6)
+sim_jaccard(tejas_doc_6[[1]], tejas_doc_6[[2]])
+tejas_doc_6[[1]]
+tejas_doc_6[[2]]
+```
+
+### Ejercicio 2 {-}
+
+2. (Ejercicio de [@mmd]) Considera la siguiente matriz de tejas-documentos:
+
+```{r}
+mat <- matrix(c(0,1,0,1,0,1,0,0,1,0,0,1,0,0,1,0,0,0,1,1,1,0,0,0),
+              nrow = 6, byrow = TRUE)
+colnames(mat) <- c('d_1','d_2','d_3','d_4')
+rownames(mat) <- c(0,1,2,3,4,5)
+mat
+```
+
+  - Sin permutar esta matriz, calcula la matriz de firmas minhash usando las siguientes funciones
+  hash: $h_1(x) = 2x+1\mod 6$, $h_2(x) = 3x+2\mod 6$, $h_3(x)=5x+2\mod 6$.
+Recuerda que $a\mod 6$ es el residuo que se obtiene al dividir a entre $6$, por ejemplo $14\mod 6 = 2$, y usa la numeración de renglones comenzando en $0$.
+
+```{r}
+calc_firmas_hash <- function(mat_df, hash_f){
+    num_hashes <- length(hash_f)
+    firmas <- matrix(Inf, ncol = ncol(mat_df), nrow = num_hashes)
+    for(r in 1:nrow(mat_df)){
+        indices <- mat_df[r, ] > 0
+        firmas[, indices] <- pmin(firmas[, indices], map_dbl(hash_f, ~.(r)))
+    }
+    firmas
+}
+```
+
+Caso 1: $h_1(x) = 2x+1\mod 6$
+```{r}
+h_1 <- function(x){  (2*x +1) %% 6}
+h_1(0:1)
+```
+```{r}
+set.seed(2851)
+hash_f_1 <- map(0:5, ~ h_1)
+##hash_f_1
+calc_firmas_1 <- calc_firmas_hash(mat,hash_f_1)
+calc_firmas_1
+```
+
+
+Caso 2: $h_2(x) = 3x+2\mod 6$
+```{r}
+h_2 <- function(x){  (3*x +2) %% 6}
+h_2(0:11)
+```
+
+```{r}
+hash_f_2 <- map(0:5, ~ h_2)
+calc_firmas_2 <- calc_firmas_hash(mat,hash_f_2)
+calc_firmas_2
+```
+
+Caso 3: $h_3(x) = 5x+2\mod 6$
+```{r}
+h_3 <- function(x){  (5*x +2) %% 6}
+h_3(0:11)
+```
+
+```{r}
+hash_f_3 <- map(0:5, ~ h_3)
+calc_firmas_3 <- calc_firmas_hash(mat,hash_f_3)
+calc_firmas_3
+```
+
+  - Compara tu resultado usando el algoritmo por renglón que vimos en clase,
+    y usando el algoritmo por columna (el mínimo hash de los números de renglón que tienen un $1$).
+
+```{r}
+generar_hash_mod <- function(p = 2038074743){
+    a <- sample.int(p - 1, 2)
+    hash_fun <- function(x) {
+        # restamos y sumamos uno para mapear a enteros positivos
+        ((a[1]*(x - 1) + a[2]) %% p) + 1
+    }
+    hash_fun
+}
+```
+
+Y finalmente reescribimos el algoritmo:
+
+```{r}
+calc_firmas_hash_reng <- function(tejas_obj, hash_funs){
+    num_docs <- tejas_obj$num_docs
+    # min hashing
+    num_hashes <- length(hash_funs)
+    tejas <- tejas_obj$tejas
+    firmas <- matrix(Inf, ncol = num_docs, nrow = num_hashes)
+    for(r in 1:length(tejas)){
+        # calcular hashes de teja
+        hashes <- map_dbl(hash_funs, ~.x(r))
+        # extaer documentos que contienen la teja
+        indices <- tejas[[r]]
+        # actualizar matriz
+        firmas[, indices] <- pmin(firmas[, indices], hashes)
+    }
+    firmas
+}
+```
+
+
+```{r}
+set.seed(21121)
+hash_f <- map(0:5, ~ generar_hash_mod())
+#firmas <- calc_firmas_hash_reng(mat, hash_f)
+#mean(firmas[,1]==firmas[,2])
+#mean(firmas[,3]==firmas[,4])
+```   
+
+La matriz de firmas final es:
+5   1   1   1
+2   2   2   2
+0   1   4   0
+
+
+  - ¿Cuál de estas funciones hash son verdaderas permutaciones?
+  * h_3 si es verdadera permutacion 
+  
+  - ¿Qué tan cerca están las similitudes de Jaccard estimadas por minhash de las verdaderas similitudes?
+  La similutud real es 0, porque no hay (1,1) en los documentos 1 y 2
+
+### Ejercicio 3 {-}
+
+3. Funciones hash. Como vimos en clase, podemos directamente hacer hash
+de las tejas (que son cadenas de texto), en lugar de usar hashes de números enteros (número de renglón). Para lo siguiente, puedes usar la función *hash_string* del paquete *textreuse* (o usar la función  *pyhash.murmur3_32* de la librería *pyhash*):
+
+ - Calcula valores hash de algunas cadenas como 'a', 'Este es el ejemplo 1', 'Este es el ejemplo 2'. 
+
+El problema con hacer hash sobre las tejas es que si mi texto tiene patrones o similitudes (por ejemplo que muchas palabras inicien con "e"), puede ser que la funcion hash no sea una permutacion y que genere muchas colisiones 
+Es mejor usar la funcion digest, el output es un numero es haxadecimal, pero se puede convertir con a un numero con la funcion *strt*
+```{r}
+digest::digest("Este es un ejemplo", "md5")
+digest::digest("Este es un ejemplo", "xxhash32")
+```
+
+
+```{r}
+set.seed(123)
+generar_hash <- function(){
+    r <- as.integer(stats::runif(1, -2147483648, 2147483647))
+    funcion_hash <- function(x){
+        bitwXor(textreuse::hash_string(x), r)    
+    }
+    funcion_hash
+}
+
+h_1 <- generar_hash()
+h_2 <- generar_hash()
+h_1("a")
+h_2("a")
+h_1("Este es el ejemplo 1")
+h_2("Este es el ejemplo 1")
+h_1("Este es el ejemplo 2")
+h_2("Este es el ejemplo 2")
+```
+ 
+ 
+ - Calcula los valores hash para las tejas de tamaño $3$ de 'Este es el ejemplo 1'. ¿Cuántos valores obtienes?
+ 
+```{r}
+tejas_ej1 <- map('Este es el ejemplo 1', shingle_chars, k = 3)
+tejas_ej1
+hash_tejas_1 <- h_1(tejas_ej1[[1]])
+hash_tejas_1
+```
+ 
+ - Usa los números del inciso anterior para calcular el valor minhash del texto anterior. 
+```{r}
+min(hash_tejas_1)
+```
+ 
+ - Repite para la cadena 'Este es otro ejemplo.', y usa este par de minhashes para estimar la similitud de Jaccard (en general usamos más funciones minhash para tener una buena estimación, no solo una!).
+
+```{r}
+tejas_ej2 <- map('Este es otro ejemplo', shingle_chars, k = 3)
+tejas_ej2
+hash_tejas_2 <- h_1(tejas_ej2[[1]])
+hash_tejas_2
+```
+ 
+```{r}
+sim_jaccard(hash_tejas_1,hash_tejas_2)
+```
+ 
+- Repite los pasos anteriores para  $10$ funciones minhash (puedes usar *minhash_generator* de *textreuse*, o usar distintas semillas para *pyhash.murmur3_32*, o algunas de las funciones que generan funciones hash que vimos en clase).
+
+```{r}
+hash_tejas_1_2 <- h_2(tejas_ej1[[1]])
+hash_tejas_2_2 <- h_2(tejas_ej2[[1]])
+sim_jaccard(hash_tejas_1_2,hash_tejas_2_2)
+```
+
+```{r}
+set.seed(563783)
+h_3 <- generar_hash()
+hash_tejas_1_3 <- h_3(tejas_ej1[[1]])
+hash_tejas_2_3 <- h_3(tejas_ej2[[1]])
+sim_jaccard(hash_tejas_1_3,hash_tejas_2_3)
+```
+
+```{r}
+library(textreuse)
+set.seed(3783)
+minhash <- minhash_generator(18)
+hash_tejas_1_4 <- minhash(tejas_ej1[[1]])
+hash_tejas_2_4 <- minhash(tejas_ej2[[1]])
+sim_jaccard(hash_tejas_1_4,hash_tejas_2_4)
+```
+
+```{r}
+library(textreuse)
+set.seed(529)
+minhash <- minhash_generator(18)
+hash_tejas_1_5 <- minhash(tejas_ej1[[1]])
+hash_tejas_2_5 <- minhash(tejas_ej2[[1]])
+sim_jaccard(hash_tejas_1_5,hash_tejas_2_5)
+```
+
+```{r}
+library(textreuse)
+set.seed(9198)
+minhash <- minhash_generator(18)
+hash_tejas_1_6 <- minhash(tejas_ej1[[1]])
+hash_tejas_2_6 <- minhash(tejas_ej2[[1]])
+sim_jaccard(hash_tejas_1_6,hash_tejas_2_6)
+```
+
+```{r}
+library(textreuse)
+set.seed(917527)
+minhash <- minhash_generator(18)
+hash_tejas_1_7 <- minhash(tejas_ej1[[1]])
+hash_tejas_2_7 <- minhash(tejas_ej2[[1]])
+sim_jaccard(hash_tejas_1_7,hash_tejas_2_7)
+```
+
+```{r}
+library(textreuse)
+set.seed(1977839393)
+minhash <- minhash_generator(18)
+hash_tejas_1_8 <- minhash(tejas_ej1[[1]])
+hash_tejas_2_8 <- minhash(tejas_ej2[[1]])
+sim_jaccard(hash_tejas_1_8,hash_tejas_2_8)
+```
+
+```{r}
+library(textreuse)
+set.seed(13)
+minhash <- minhash_generator(18)
+hash_tejas_1_9 <- minhash(tejas_ej1[[1]])
+hash_tejas_2_9 <- minhash(tejas_ej2[[1]])
+sim_jaccard(hash_tejas_1_9,hash_tejas_2_9)
+```
+
+```{r}
+library(textreuse)
+set.seed(8802)
+minhash <- minhash_generator(18)
+hash_tejas_1_10 <- minhash(tejas_ej1[[1]])
+hash_tejas_2_10 <- minhash(tejas_ej2[[1]])
+sim_jaccard(hash_tejas_1_10,hash_tejas_2_10)
+```
+
+### Ejercicio 4 {-}
+
+4. Utiliza el código visto en clase para encontrar pares de similitud alta en la colección de tweets que vimos en clase. Utiliza unos $15$ hashes para encontrar tweets casi duplicados. ¿Cuántos tweets duplicados encontraste?
+¿Qué pasa si usas menos o más funciones hash?
+
+
+```{r}
+corpus_tweets[[2]]$content
+min_hashes <- hashes(corpus_tweets)
+similitud_2 <- map_dbl(min_hashes, ~ mean(min_hashes[[2]] == .x))
+indices_2 <- which(similitud_2 > 0.99)
+length(names(indices_2))
+```
+
+```{r}
+names(indices_2)[1:5]
+similitud[indices_2][1:5]
+map(names(indices_2), ~ corpus_tweets[[.x]]$content)[1:5]
+```
+
+```{r}
+corpus_tweets[[3]]$content
+similitud_3 <- map_dbl(min_hashes, ~ mean(min_hashes[[3]] == .x))
+indices_3 <- which(similitud_3 > 0.99)
+length(names(indices_3))
+
+names(indices_3)[1:5]
+similitud[indices_3][1:5]
+map(names(indices_3), ~ corpus_tweets[[.x]]$content)[1:5]
+```
+
+```{r}
+corpus_tweets[[4]]$content
+similitud_4 <- map_dbl(min_hashes, ~ mean(min_hashes[[4]] == .x))
+indices_4 <- which(similitud_4 > 0.5)
+length(names(indices_4))
+
+names(indices_4)[1:5]
+similitud[indices_4][1:5]
+map(names(indices_4), ~ corpus_tweets[[.x]]$content)[1:5]
+```
+
