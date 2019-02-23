@@ -154,6 +154,8 @@ mediana_max <- trans_df %>%
 sprintf("Mediana de máximo monto: %.1f", mediana_max)
 ```
 
+**NOTE** Se están seleccionando todas las transacciones por cliente, en lugar de seleccionar
+transacciones al asar
 
 Sin embargo, esto no funciona si seleccionamos al azar las transacciones, obtenemos
 una mala estimación con sesgo alto:
@@ -352,6 +354,8 @@ son operaciones relativamente eficientes (depende del número de hashes
 y es posible paralelizar).
 
 - No es posible eliminar elementos de un filtro de Bloom (¿por qué?).
+**NOTE** No es posible porque no se puede solo poner en ceros los unos, ya que
+se estarían eliminando otros elementos
 
 ## Análisis de filtro de Bloom
 
@@ -506,7 +510,7 @@ hash_generator <- function(k = 1, n){
       # solo tomamos 7 para poder convertir a un entero
       sub_str <- substr(digest::digest(x, "xxhash32", 
         serialize = FALSE, seed = s), 1, 7)
-      strtoi(sub_str, base = 16L) %% n + 1
+      strtoi(sub_str, base = 16L) %% n + 1 #Se convirte a entero
     })
   }
   hasher
@@ -523,13 +527,20 @@ hashes('árbol')
 
 Una implementación del filtro de Bloom es como sigue:
 
+**NOTE** Esta asignacion lo que ayuda es que no estamos compiando en cada
+iteracion el vector v
+v <-- añadir(v)
+
+**NOTE** Otra solucion es hacer la funcion vectorizada, calcular todos los hashes 
+al mismo tiempo
 
 ```{r}
 filtro_bloom <- function(num_hashes, n){
     v <- raw(n)
     hashes <- hash_generator(num_hashes, n)
     insertar <- function(x){
-        v[hashes(x)] <<- as.raw(1)
+        v[hashes(x)] <<- as.raw(1) ## se hace <<- para hacer la asignacion en la variable v
+        ## de la funcion arriba
     }
     en_filtro <- function(x){
         all(as.logical(v[hashes(x)]))
@@ -553,7 +564,7 @@ Ahora creamos el filtro e insertamos los elementos del diccionario:
 ```{r, cache = TRUE}
 # crear filtro
 set.seed(812)
-filtro_b <- filtro_bloom(num_hashes = 6, n = 4e6)
+filtro_b <- filtro_bloom(num_hashes = 6, n = 8e6) ## Original 4e6
 # insertar palabras de diccionario
 system.time(
     for(i in seq_along(diccionario)){
@@ -747,7 +758,7 @@ usar una estructura eficiente en memoria (como un diccionario o tabla hash) para
 cada elemento nuevo del flujo, decidir si es nuevo, agregarlo a la estructura,
 y contar. Sin embargo, si el número de elementos distintos es grande, esta
 estrategia puede requierir mucha memoria y procesamiento. Un filtro de bloom 
-no es del todo adecuado, pues confrome vayamos
+no es del todo adecuado, pues conforme vayamos
 llenando de 1´s el su vector, la tasa de falsos positivos irá incrementando (en el 
 límite es 1).
 
