@@ -1,0 +1,352 @@
+---
+title: "04-procesamiento-flujos-tarea"
+author: "Soledad Perez"
+date: "22/2/2019"
+output: html_document
+---
+
+```{r, echo=FALSE, message=FALSE}
+library(tidyverse)
+theme_set(theme_bw())
+cb_palette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+```
+
+
+### Tarea
+
+- Resuelve los dos ejercicios pendientes (uno en filtro de Bloom, otro en las sección de muestras uniformemente distribuidas
+
+#### Filtro de Bloom
+
+- Encuentra alguna palabra del español que no esté en el filtro (por ejemplo una
+de español en México). Agrégala al filtro y verifica que es detectada como
+positiva. Busca una posible manera incorrecta de escribirla y prueba la
+función de arriba de sugerencias.
+
+Diccionario
+```{r, message = FALSE}
+diccionario <- read_csv("../datos/diccionario/es_dic.txt", col_names = FALSE) %>% 
+          pluck("X1")
+# nota: el encoding del diccionario debe ser utf-8
+# diccionario <- iconv(diccionario, to = "UTF-8")
+m <- length(diccionario)
+m
+```
+```{r, fig.width = 8}
+tasa_fp <- function(n, s, k) {
+    (1 - (1 - (1 / n)) ^ (k * s)) ^ k
+}
+df <- expand.grid(list(s = c(1e5, 1e6, 1e7, 1e8),
+        k = seq(1, 20),
+        n = 10 ^ seq(5, 9, by = 0.5))) %>%
+      mutate(mill_bits = round(n/1e6, 1)) %>%
+      mutate(tasa_falsos_p = tasa_fp(n, s, k)) %>%
+      mutate(s_str = paste0(s, ' insertados'))
+
+
+ggplot(df, aes(x = k, y = tasa_falsos_p, 
+  colour = factor(mill_bits), group = mill_bits)) + 
+  geom_line(size = 1.2) +
+  facet_wrap(~s_str) +
+  labs(x = "k = número de hashes", 
+       y =  "Proba de falso positivo",
+       colour = "Millones bits \n en vector") +
+  scale_y_sqrt(breaks = c(0.01,0.05,0.1,0.25,0.5,1)) 
+```
+
+
+```{r}
+df <- expand.grid(list(s = 300000,
+                  k = seq(4, 20),
+                  n = c(1e6, 2e6, 4e6, 6e6, 8e6)
+                  )) %>%
+      mutate(millones_bits = (n/1e6)) %>%
+      mutate(tasa_falsos_p = tasa_fp(n, s, k)) %>%
+      mutate(s_str = paste0(s, ' insertados'))
+
+
+ggplot(df, aes(x = k, y = tasa_falsos_p, 
+               colour=factor(millones_bits), group=millones_bits)) + 
+               geom_line(size=1.2) +
+               facet_wrap(~s_str) +
+               labs(x="k = número de hashes", 
+                    colour = "Mill bits \n en vector") +
+               scale_y_log10(breaks= c(0.0001, 0.001, 0.01, 0.1))
+```
+
+Vector de 8 millones de bits con unos 6 hashes. Nuestra
+estimación de falsos positivos con 6 hashes es de
+
+```{r}
+n <- 8e6
+tasa_fp(n = n, s = 250000, k = 6)
+```
+
+
+Ahora necesitamos nuestras funciones hash escogidas al azar. Podemos
+usar el algoritmo [xxhash32](https://github.com/Cyan4973/xxHash), por ejemplo:
+
+```{r}
+library(digest)
+set.seed(18823)
+hash_generator <- function(k = 1, n){
+  seeds <- sample.int(652346, k)
+  hasher <- function(x){
+    sapply(seeds, function(s){
+      # en digest, serialize puede ser false, pues trabajamos con cadenas
+      # la salida de xxhash32 son 8 caracteres hexadecimales, pero 
+      # solo tomamos 7 para poder convertir a un entero
+      sub_str <- substr(digest::digest(x, "xxhash32", 
+        serialize = FALSE, seed = s), 1, 7)
+      strtoi(sub_str, base = 16L) %% n + 1 #Se convirte a entero
+    })
+  }
+  hasher
+}
+hashes <- hash_generator(5, n)  
+```
+
+Implementación del fitro de Bloom:
+
+```{r}
+filtro_bloom <- function(num_hashes, n){
+    v <- raw(n)
+    hashes <- hash_generator(num_hashes, n)
+    insertar <- function(x){
+        v[hashes(x)] <<- as.raw(1) ## se hace <<- para hacer la asignacion en la variable v
+        ## de la funcion arriba
+        x <- iconv(x, "utf-8")
+        v[hashes(x)] <<- as.raw(1)
+    }
+    en_filtro <- function(x){
+        
+        all(as.logical(v[hashes(x)]))
+    }
+    vec <- function() v
+    filtro <- list(insertar = insertar, en_filtro = en_filtro, vec = vec)
+    filtro
+}
+```
+
+Ahora creamos el filtro e insertamos los elementos del diccionario:
+```{r, cache = TRUE}
+# crear filtro
+set.seed(812)
+filtro_b <- filtro_bloom(num_hashes = 6, n = 8e6) ## Original 4e6
+# insertar palabras de diccionario
+system.time(
+    for(i in seq_along(diccionario)){
+        filtro_b$insertar(diccionario[i])
+    })
+```
+
+El tamaño del filtro es de
+
+```{r}
+format(object.size(filtro_b$vec()), units = "Mb")
+```
+
+Una palabra que no está en el diccionario es:
+
+```{r}
+filtro_b$en_filtro("botana")
+filtro_b$en_filtro("botanear")
+filtro_b$en_filtro("chipotle")
+filtro_b$en_filtro("vocho")
+filtro_b$en_filtro("apapac")
+```
+
+Insertamos las palabras
+```{r}
+filtro_b$insertar("botanear")
+filtro_b$insertar("chipotle")
+```
+
+Verificamos que esté la palabra **botanear**
+
+```{r}
+filtro_b$en_filtro("botana")
+filtro_b$en_filtro("botanear")
+filtro_b$en_filtro("chipotle")
+```
+
+- Prueba usando un vector de bits mucho más chico (por ejemplo de 500 mil bits). 
+¿Qué tasa de falsos positivos obtienes?
+
+
+```{r, cache = TRUE}
+# crear filtro
+set.seed(536)
+filtro_b_2 <- filtro_bloom(num_hashes = 6, n = 5e5) ## Original 4e6
+# insertar palabras de diccionario
+system.time(
+    for(i in seq_along(diccionario)){
+        filtro_b$insertar(diccionario[i])
+    })
+```
+
+
+Tasa de falsos positivos
+```{r}
+n <- 5e5
+tasa_fp(n = n, s = 250000, k = 6)
+```
+
+```{r}
+filtro_b_2$en_filtro("botana") # botana si estaba cuando el vector era de 8e6
+filtro_b_2$en_filtro("botanear")
+filtro_b_2$en_filtro("chipotle")
+filtro_b_2$en_filtro("vocho")
+filtro_b_2$en_filtro("apapac")
+```
+
+Sugerencias de corrección
+
+```{r}
+generar_dist_1 <- function(palabra){
+  caracteres <- c(letters, 'á', 'é', 'í', 'ó', 'ú', 'ñ')
+  pares <- lapply(0:(nchar(palabra)), function(i){
+    c(str_sub(palabra, 1, i), str_sub(palabra, i+1, nchar(palabra)))
+  })
+  eliminaciones <- pares %>% map(function(x){ paste0(x[1], str_sub(x[2],2,-1))})
+  sustituciones <- pares %>% map(function(x)
+      map(caracteres, function(car){
+    paste0(x[1], car, str_sub(x[2], 2 ,-1))
+  })) %>% flatten 
+  inserciones <- pares %>% map(function(x){
+    map(caracteres, function(car) paste0(x[1], car, x[2]))
+  }) %>% flatten
+  transposiciones <- pares %>% map(function(x){
+    paste0(x[1], str_sub(x[2],2,2), str_sub(x[2],1,1), str_sub(x[2],3,-1))
+  })
+  c(eliminaciones, sustituciones, transposiciones, inserciones) %>% unlist
+}
+```
+
+```{r}
+generar_dist_1('bottana') %>% keep(filtro_b$en_filtro)
+```
+
+
+```{r}
+generar_dist_1('chipotle') %>% keep(filtro_b$en_filtro)
+```
+
+#### Hyperloglog
+
+- Repetir la estimación del hyperloglog del ejemplo de clase aumentando a 250-500 mil elementos distintos. Puedes utilizar la implementación de spark. ¿Qué errror relativo
+obtuviste? Nota: puedes usar la implementación en R que vimos en clase, pero ojo: las funciones hash que utilizamos son relativamente lentas.
+
+Consideramos una función hash (para cadenas):
+```{r}
+hash_gen <- function(seed){
+  function(x){
+    hash_32 <- digest::digest(x, 'xxhash32', serialize = FALSE, seed = seed) 
+    # Covertimos a bits, tomando de dos en dos:
+    # Esta implementación es lenta
+    sapply(seq(1, nchar(hash_32), 2), function(x) substr(hash_32, x, x+1)) %>%
+        strtoi(16L) %>% as.raw %>% rawToBits()
+  }
+}
+set.seed(5451)
+hash_1 <- hash_gen(seed = 123)
+hash_2 <- hash_gen(seed = 564)
+```
+
+Funcion para contar numero de ceros 
+```{r}
+tail_length <- function(bits){
+  bits %>% which.max - 1  
+}
+hash_1("7yya4071872aa") %>% tail_length
+```
+
+```{r}
+cubeta_bits <- 5
+m <- 2^cubeta_bits
+tail_length_lead <- function(bits){
+  bits[-c(1:cubeta_bits)] %>% which.max %>% as.integer
+}
+hash_1("7yya40787")
+hash_1("7yya40787") %>% tail_length_lead
+cubeta <- function(bits){
+  paste0(as.character(bits[1:cubeta_bits]), collapse = "")
+}
+hash_1("7yya40787") %>% cubeta
+```
+
+Simulamos unos datos y calculamos la cubeta para cada dato:
+
+```{r}
+n <- 500000
+df <- data_frame(num_distintos = 1:n) %>%
+      mutate(id = as.character(sample.int(52345678, n, replace = FALSE))) %>%
+      mutate(hash = map(id, hash_1)) %>%
+      mutate(cubeta = map_chr(hash, cubeta))
+df
+```
+
+Y calculamos la longitud de la cola:
+
+```{r}
+df <- df %>% mutate(tail = map_int(hash, tail_length_lead))
+df      
+```
+
+Ahora vemos cómo calcular nuestra estimación. cuando hay 50 mil distintos, calculamos
+máximo por cubeta
+
+```{r}
+resumen_50 <- df %>% filter(num_distintos <= 50000) %>% 
+    group_by(cubeta) %>% 
+    summarise(tail_max = max(tail))
+resumen_50
+```
+
+Y luego calculamos la media armónica y reescalamos para obtener:
+
+```{r}
+armonica <- function(x) 1/mean(1/x)
+0.72 * m * armonica(2 ^ resumen_50$tail_max)
+```
+
+Y esta es nuestra estimación de únicos en el momento que el verdadero valor
+es igual a 50000.
+
+Podemos ver cómo se desempeña la estimación conforme nuevos únicos van llegando (el 
+siguiente cálculo son necesarias algunas manipulaciones para poder calcular
+el estado del estimador a cada momento);
+
+```{r}
+res <- df %>% spread(cubeta, tail, fill = 0) %>%
+        gather(cubeta, tail, -num_distintos, -id, -hash) %>%
+        select(num_distintos, cubeta, tail) 
+res_2 <- res %>% 
+      group_by(cubeta) %>%
+      arrange(num_distintos) %>%
+      mutate(tail_max = cummax(tail)) %>%
+      group_by(num_distintos) %>%
+      summarise(estimador_hll = 0.72*(m*armonica(2^tail_max)))
+ggplot(res_2 %>% filter(num_distintos > 100),
+       aes(x = num_distintos, y = estimador_hll)) + geom_line() +
+  geom_abline(slope = 1, colour ='red') 
+```
+
+
+Finalmente, examinamos el error relativo:
+
+```{r}
+quantile(1 - res_2$estimador_hll/res_2$num_distintos, probs=c(0.1, 0.5, .9))
+```
+
+
+
+
+```{r}
+#library(sparklyr)
+#sc <- spark_connect(master = "local") # esto normalmente no lo hacemos desde R
+#df_tbl <- copy_to(sc, df %>% select(num_distintos, id))
+#df_tbl %>%
+#  summarise(unicos_hll = approx_count_distinct(id)) # error estándar relativo 0.05
+```
+

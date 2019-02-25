@@ -539,13 +539,10 @@ filtro_bloom <- function(num_hashes, n){
     v <- raw(n)
     hashes <- hash_generator(num_hashes, n)
     insertar <- function(x){
-<<<<<<< HEAD
         v[hashes(x)] <<- as.raw(1) ## se hace <<- para hacer la asignacion en la variable v
         ## de la funcion arriba
-=======
         x <- iconv(x, "utf-8")
         v[hashes(x)] <<- as.raw(1)
->>>>>>> upstream/master
     }
     en_filtro <- function(x){
         
