@@ -153,7 +153,7 @@ filtro_b$en_filtro("botana")
 filtro_b$en_filtro("botanear")
 filtro_b$en_filtro("chipotle")
 filtro_b$en_filtro("vocho")
-filtro_b$en_filtro("apapac")
+filtro_b$en_filtro("apapachar")
 ```
 
 Insertamos las palabras
@@ -192,12 +192,16 @@ n <- 5e5
 tasa_fp(n = n, s = 250000, k = 6)
 ```
 
+También hay que calcular la tasa de ocupación del vector
+En este caso es al rededor del 95%
+
+
 ```{r}
 filtro_b_2$en_filtro("botana") # botana si estaba cuando el vector era de 8e6
 filtro_b_2$en_filtro("botanear")
 filtro_b_2$en_filtro("chipotle")
 filtro_b_2$en_filtro("vocho")
-filtro_b_2$en_filtro("apapac")
+filtro_b_2$en_filtro("apapachar")
 ```
 
 Sugerencias de corrección
@@ -231,6 +235,16 @@ generar_dist_1('bottana') %>% keep(filtro_b$en_filtro)
 ```{r}
 generar_dist_1('chipotle') %>% keep(filtro_b$en_filtro)
 ```
+
+#### Ejercicio 
+
+Al tiempo n, la probabilidad de que un elemento del flujo compelto esté en la muestra
+es uniforme k/n
+
+Sol. Hacer inducción sobre n, no hacer inducción sobre j
+
+
+
 
 #### Hyperloglog
 

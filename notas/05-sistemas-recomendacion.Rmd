@@ -29,6 +29,7 @@ Los datos utilizados para este tipo de sistemas son de dos
 tipos:
 
 - Ratings  *explícitos* dados por los usuarios (por ejemplo, Netflix mucho tiempo fue así: 1-5 estrellas)
+    **NOTE** cada vez menos usado, ya que obligas a los usuarios a rankear los items
 
 - Ratings *implícitos* que se derivan de la actividad de los usuarios (por ejemplo, vio la película completa, dio click en la descripción de un producto, etc.). 
 
@@ -767,9 +768,9 @@ El problema otra vez es similitudes ruidosas que provienen de pocas evaluaciones
 Intenta con otras películas que te interesen
 
 ```{r}
-ejemplos(11271) %>% filter(num_calif_peli>300) %>% head(20)
-ejemplos(11929) %>% filter(num_calif_peli>300) %>% head(20)
-ejemplos(2660) %>% filter(num_calif_peli>300) %>% head(20)
+ejemplos(457) %>% filter(num_calif_peli>300) %>% head(20)
+#ejemplos(11929) %>% filter(num_calif_peli>300) %>% head(20)
+#ejemplos(2660) %>% filter(num_calif_peli>300) %>% head(20)
 ```
 
 ### Implementación 
