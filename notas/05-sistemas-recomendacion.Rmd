@@ -772,9 +772,14 @@ El problema otra vez es similitudes ruidosas que provienen de pocas evaluaciones
 Intenta con otras películas que te interesen
 
 ```{r}
-ejemplos(457) %>% filter(num_calif_peli>300) %>% head(20)
-#ejemplos(11929) %>% filter(num_calif_peli>300) %>% head(20)
+ejemplos(11929) %>% filter(num_calif_peli>300) %>% head(20)
 #ejemplos(2660) %>% filter(num_calif_peli>300) %>% head(20)
+```
+
+```{r}
+ejemplos(1324) %>% filter(num_calif_peli>300) %>% head(20) #The Professional
+ejemplos(12293) %>% filter(num_calif_peli>300) %>% head(20) #The godfather
+ejemplos(14691) %>% filter(num_calif_peli>300) %>% head(20) #The Matrix
 ```
 
 ### Implementación 

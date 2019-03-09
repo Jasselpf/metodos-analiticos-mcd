@@ -1,0 +1,42 @@
+---
+title: "05-sistemas-recomendacion-tarea"
+author: "Soledad Perez"
+date: "3/3/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Tarea 5 
+
+1) unos dos ejemplos del ejercicio de la sección 5.5 (encontrar algunas películas interesantes, buscar las similares). Pueden seguir el código de los ejemplos. 
+
+```{r}
+head(pelis_nombres)
+```
+```{r}
+pelis_nombres %>% filter(grepl("Professional", nombre))
+```
+
+```{r}
+ejemplos(1324) %>% filter(num_calif_peli>300) %>% head(20)
+```
+
+```{r}
+pelis_nombres %>% filter(grepl("The Godfather", nombre))
+```
+```{r}
+ejemplos(12293) %>% filter(num_calif_peli>300) %>% head(20)
+```
+
+```{r}
+pelis_nombres %>% filter(grepl("The Matrix", nombre))
+```
+
+```{r}
+ejemplos(14691) %>% filter(num_calif_peli>300) %>% head(20)
+```
+
+2) leer la sección 5.5.2 de implementación
