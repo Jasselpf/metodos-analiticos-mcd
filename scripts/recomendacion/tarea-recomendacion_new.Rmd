@@ -227,7 +227,7 @@ modelo <- ml_als(entrena_tbl,
               rating_col = 'rating',
               user_col = 'userId',
               item_col = 'movieId',
-              rank = 2, reg_param = 0.1,
+              rank = 20, reg_param = 0.11,
               checkpoint_interval = 5,
               max_iter = 50)
 ```
