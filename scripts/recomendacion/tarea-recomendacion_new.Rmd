@@ -1,0 +1,339 @@
+---
+title: "Recomendación para datos de movielens"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Preparación
+
+Consideramos el conjunto chico de calificaciones de películas de 
+[MovieLens](https://grouplens.org/datasets/movielens/). Son unas 100 mil
+evaluaciones de 610 usuarios sobre 9 mil películas.
+
+```{r}
+library(tidyverse)
+movies <- read_csv("../../datos/ml-latest-small/movies.csv")
+ratings <- read_csv("../../datos/ml-latest-small/ratings.csv")
+```
+
+```{r}
+nrow(ratings)
+resumen <- ratings %>% group_by(userId) %>% summarise(num_ratings = length(rating)) 
+quantile(resumen$num_ratings)
+```
+```{r}
+movies
+```
+
+Seleccionamos usuarios de validación
+
+```{r}
+set.seed(5512)
+# seleccionar usuarios de validación, 300 de 600
+user_id_valid <- ratings$userId %>% unique %>% sample(size = 300)
+```
+
+Y seleccionamos el 20\% de las últimas evaluaciones de estos usuarios:
+
+```{r}
+validacion <- ratings %>% filter(userId %in% user_id_valid) %>% 
+  group_by(userId) %>% 
+  mutate(rank = rank(timestamp, ties.method = "random") / length(timestamp)) %>% 
+  filter(rank >= 0.8)
+nrow(validacion)
+```  
+
+```{r}
+entrena <- ratings %>% anti_join(validacion)
+nrow(entrena)
+```
+
+**Pregunta**: ¿cuáles son las películas mejor evaluadas? Reporta la
+media y el número de evaluaciones. Recuerda filtrar por películas que han sido
+poco vistas. Describe la distribución de número de evaluaciones por usuario (usa
+cuantiles o un histograma, por ejemplo). ¿Cuántas evaluaciones hizo el usuario
+con menos evaluaciones?
+
+# Películas mejor evaluadas
+```{r}
+# Películas mejor evaluadas
+tabla <- as.data.frame(table(entrena$movieId))
+colnames(tabla) <- c("movieId","Freq")
+entrena_2 <- merge(entrena,tabla)
+entrena_2 <- entrena_2[,c(2,1,5,3,4)]
+# Filtramos películas con más de 200 evaluaciones y que tengan rating de 5
+ranked <- filter(entrena_2, Freq > 200 & rating == 5)
+ranked <- ranked[order(-ranked$Freq),]
+table(ranked$movieId)
+```
+
+```{r}
+filter(movies, movieId == 356)
+# 317 evaluaciones, de estas 111 son de calificación 5
+filter(movies, movieId == 318)
+filter(movies, movieId == 296)
+filter(movies, movieId == 2571)
+```
+
+Otra forma
+```{r}
+arrange(medias_pelis, desc(media_peli)) %>% 
+  filter(num_calif_peli > 200) %>%
+  top_n(200, media_peli) %>% 
+  mutate(media_peli = round(media_peli, 2)) %>%
+  DT::datatable()
+```
+
+
+# Media y número de evaluaciones
+```{r}
+# Con datos de entrenamiento sin filtrar
+# Número de evaluaciones
+num_eval <- nrow(entrena)
+num_eval
+```
+```{r}
+# Media de evaluaciones (Con datos de entrenamiento sin filtrar)
+prom <- mean(entrena$rating)
+prom
+```
+
+Otra forma de calcular la media
+```{r}
+medias_pelis <- entrena %>% group_by(movieId) %>% 
+    summarise(media_peli = mean(rating), num_calif_peli = n()) 
+medias_pelis <- left_join(medias_pelis, movies)
+```
+
+
+```{r}
+# Con datos filtrados (Películas con más de 100 evaluaciones)
+ranked_2 <- filter(entrena_2, Freq > 20)
+num_eval_2 <- nrow(ranked_2)
+num_eval_2
+```
+
+```{r}
+prom_2 <- mean(ranked_2$rating)
+prom_2
+```
+
+Describe la distribución de número de evaluaciones por usuario (usa
+cuantiles o un histograma, por ejemplo). 
+```{r}
+tabla_2 <- as.data.frame(table(entrena$userId))
+colnames(tabla_2) <- c("userId","Freq_Usr")
+tabla_2 <- tabla_2[order(-tabla_2$Freq),]
+library(ggplot2)
+qplot(tabla_2$Freq_Usr, geom = "histogram")
+ggplot()
+
+```
+¿Cuántas evaluaciones hizo el usuario con menos evaluaciones?
+
+```{r}
+tabla_2[which.min(tabla_2$Freq_Usr),]
+```
+
+**Pregunta**: explica el proceso de selección de la muestra de validación para
+este ejemplo (ojo: utiliza el timestamp de la calificación).
+
+De los 600 usuarios se seleccionan 300 de manera aleatoria (sin repetir)
+Se selecciona el 20% de las últimas evaluaciones de estos usuarios, esto se hace con la función rank y los datos de timestamp, se toman aquellos datos en los que rank sea mayor a 0.8 (para el 20% de las últimas evaluaciones)
+
+## 2. Evaluación de modelo de referencia
+
+```{r}
+pelis_medias <- entrena %>% group_by(movieId) %>% 
+  summarise(media_peli = mean(rating), num_eval = length(rating))
+usuarios_medias <- entrena %>% group_by(userId) %>% summarise(media_usuario = mean(rating))
+media_gral <- mean(entrena$rating)
+media_gral
+```
+
+```{r}
+entrena_ref <- entrena %>% ungroup %>% 
+  left_join(pelis_medias) %>% 
+  left_join(usuarios_medias) %>% 
+  mutate(pred = media_peli + (media_usuario - media_gral)) %>% 
+  mutate(pred = ifelse(is.na(pred), media_gral, pred)) %>% 
+  mutate(rating_c = rating - pred)
+valida_ref <- validacion %>% ungroup %>% 
+  left_join(pelis_medias) %>% 
+  left_join(usuarios_medias) %>% 
+  mutate(pred = media_peli + (media_usuario - media_gral)) %>% 
+  mutate(pred = ifelse(is.na(pred), media_gral, pred))
+```
+
+**Pregunta**: Calcula la raíz del error cuadrático medio del modelo de referencia
+(entrenamiento y validación).
+
+```{r}
+# aquí tu código
+
+medias_pred <- entrena_ref %>% group_by(movieId) %>%
+  summarise(media_pred = mean(rating)) 
+media_total_e <- entrena_ref %>% ungroup %>% summarise(media = mean(rating)) %>% pull(media)
+dat_valida_pred <- valida_ref %>% left_join(medias_pred %>% collect()) 
+head(dat_valida_pred)
+```
+
+```{r}
+recm <- function(calif, pred){
+  sqrt(mean((calif - pred)^2))
+}
+
+# error <- valida_ref %>% ungroup %>%
+#   summarise(error = mean((rating - medias_pred)^2))
+# error
+
+error_valida <- recm(valida_ref$rating,valida_ref$pred)
+error_valida
+```
+
+```{r}
+error_entrena <- recm(entrena_ref$rating,entrena_ref$pred)
+error_entrena
+```
+
+
+## 3. Mínimos cuadrados alternados
+
+Ahora probamos mínimos cuadrados alternados con 2 factores latentes
+
+```{r}
+library(sparklyr)
+sc <- spark_connect(master = "local")
+spark_set_checkpoint_dir(sc, './checkpoint')
+```
+
+En este ejemplo, ajustamos por media de películas y usuarios antes
+de correr le modelo:
+
+
+```{r}
+entrena_tbl <- copy_to(sc, entrena_ref, overwrite = T)
+valida_tbl <- copy_to(sc, valida_ref, overwrite = T)
+```
+
+Rellena los nombres de las variables, 
+
+```{r}
+# rellena valores (usa rango 2 al principio)
+modelo <- ml_als(entrena_tbl, 
+              rating_col = 'rating',
+              user_col = 'userId',
+              item_col = 'movieId',
+              rank = 2, reg_param = 0.1,
+              checkpoint_interval = 5,
+              max_iter = 50)
+```
+
+Calcula predicciones y coléctalas al ambiente de R:
+
+```{r}
+preds <- sdf_predict(valida_tbl, modelo) %>% collect() %>% 
+  mutate(final_pred = pred + prediction)
+preds_entrena <- sdf_predict(entrena_tbl, modelo) %>% collect() %>% 
+  mutate(final_pred = pred + prediction)
+```
+
+**Pregunta** Explica por qué el cálculo de *final_pred*. 
+Para poder sacar un promedio de ambas
+¿Para que esté en escala de 1 a 10 en lugar de 1 a 5?
+
+Calcula el error de entrenamiento y validación para este modelo.
+
+```{r}
+# aquí tu código
+error_mc <- recm(preds_entrena$rating,preds_entrena$prediction)
+error_mc
+```
+
+** Pregunta**: Según los resultados que obtuviste en la pregunta anterior, intenta
+incrementar o decrementar la regularización. Reporta error de entrenamiento y validación.
+
+```{r}
+# rellena valores (usa rango 2 al principio)
+modelo_2 <- ml_als(entrena_tbl, 
+              rating_col = 'rating',
+              user_col = 'userId',
+              item_col = 'movieId',
+              rank = 2, reg_param = 0.05,
+              checkpoint_interval = 5,
+              max_iter = 50)
+```
+
+Calcula predicciones y coléctalas al ambiente de R:
+
+```{r}
+preds_2 <- sdf_predict(valida_tbl, modelo_2) %>% collect() %>% 
+  mutate(final_pred = pred + prediction)
+preds_entrena_2 <- sdf_predict(entrena_tbl, modelo_2) %>% collect() %>% 
+  mutate(final_pred = pred + prediction)
+```
+
+```{r}
+# aquí tu código
+error_mc_2 <- recm(preds_entrena_2$rating,preds_entrena_2$prediction)
+error_mc_2
+```
+
+```{r}
+# rellena valores (usa rango 2 al principio)
+modelo_3 <- ml_als(entrena_tbl, 
+              rating_col = 'rating',
+              user_col = 'userId',
+              item_col = 'movieId',
+              rank = 2, reg_param = 0.3,
+              checkpoint_interval = 5,
+              max_iter = 50)
+```
+
+Calcula predicciones y coléctalas al ambiente de R:
+
+```{r}
+preds_3 <- sdf_predict(valida_tbl, modelo_3) %>% collect() %>% 
+  mutate(final_pred = pred + prediction)
+preds_entrena_3 <- sdf_predict(entrena_tbl, modelo_3) %>% collect() %>% 
+  mutate(final_pred = pred + prediction)
+```
+
+```{r}
+# aquí tu código
+error_mc_3 <- recm(preds_entrena_3$rating,preds_entrena_3$prediction)
+error_mc_3
+```
+
+**Pregunta** (opcional): cambia el número de factores y afina la regularización para mejorar los resultados del inciso anterior.
+
+```{r}
+# rellena valores (usa rango 2 al principio)
+modelo_4 <- ml_als(entrena_tbl, 
+              rating_col = 'rating',
+              user_col = 'userId',
+              item_col = 'movieId',
+              rank = 5, reg_param = 0.01,
+              checkpoint_interval = 5,
+              max_iter = 50)
+```
+
+Calcula predicciones y coléctalas al ambiente de R:
+
+```{r}
+preds_4 <- sdf_predict(valida_tbl, modelo_4) %>% collect() %>% 
+  mutate(final_pred = pred + prediction)
+preds_entrena_4 <- sdf_predict(entrena_tbl, modelo_4) %>% collect() %>% 
+  mutate(final_pred = pred + prediction)
+```
+
+```{r}
+# aquí tu código
+error_mc_4 <- recm(preds_entrena_4$rating,preds_entrena_4$prediction)
+error_mc_4
+```
+
+**Pregunta** (opcional): usa el conjunto de datos más grande en la liga de arriba, si quieres obtener mejores resultados.

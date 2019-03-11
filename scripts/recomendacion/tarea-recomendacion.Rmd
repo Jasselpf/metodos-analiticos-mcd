@@ -15,6 +15,7 @@ evaluaciones de 610 usuarios sobre 9 mil películas.
 
 ```{r}
 library(tidyverse)
+library(tibble)
 movies <- read_csv("../../datos/ml-latest-small/movies.csv")
 ratings <- read_csv("../../datos/ml-latest-small/ratings.csv")
 ```
@@ -26,6 +27,11 @@ quantile(resumen$num_ratings)
 ```
 ```{r}
 movies
+```
+
+```{r}
+min(resumen$num_ratings)
+max(resumen$num_ratings)
 ```
 
 
@@ -57,6 +63,35 @@ media y el número de evaluaciones. Recuerda filtrar por películas que han sido
 poco vistas. Describe la distribución de número de evaluaciones por usuario (usa
 cuantiles o un histograma, por ejemplo). ¿Cuántas evaluaciones hizo el usuario
 con menos evaluaciones?
+
+```{r}
+mean_pelis <- entrena %>% group_by(movieId) %>%
+    summarise(mean_peli = mean(rating), num_calif_peli = n())
+mean_pelis <- left_join(mean_pelis, movies)
+```
+```{r}
+max(mean_pelis$num_calif_peli)
+min(mean_pelis$num_calif_peli)
+
+quantile(mean_pelis$num_calif_peli)
+hist(mean_pelis$num_calif_peli)
+```
+```{r}
+str(mean_pelis)
+head(mean_pelis)
+#mean_pelis <- data_frame(table(mean_pelis))
+```
+
+
+```{r}
+arrange(mean_pelis, desc(mean_peli)) %>%
+    filter(num_calif_peli >= 40) %>%
+    top_n(20, mean_peli) %>%
+    mutate(mean_peli = round(mean_peli, 2)) %>%
+    DT::datatable()
+
+```
+
 
 **Pregunta**: explica el proceso de selección de la muestra de validación para
 este ejemplo (ojo: utiliza el timestamp de la calificación).
