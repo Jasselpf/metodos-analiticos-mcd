@@ -1,0 +1,94 @@
+---
+title: "Karate"
+output:
+  html_document:
+    df_print: paged
+---
+
+Escoge una gráfica de tu interés (por ejemplo de moviegalaxies,
+o alguna del paquete *igraph*). 
+
+ - ¿Cuáles son los nodos más importantes? Considera betweeness, closeness,
+ centralidad de eigenvector.
+ - Grafica (ggraph o visNetwork) usando una algoritmo de fuerza y mostrando con tamaño y/o color las importancias. Si tu gráfica es muy grande puedes exportar a *gml* para utilizar Gephi (ver notas).
+
+Por ejemplo:
+
+Si consideramos los datos *karate* del paquete *igraphdata*,
+donde los nodos son el número de actividades comunes que los
+miembros del club tomaban.
+
+```{r}
+#install.packages("igraphdata")
+library(tidyverse)
+library(tidygraph)
+library(ggraph)
+library(igraphdata)
+data(karate)
+componentes <- igraph::decompose(karate)
+#head(componentes)
+componente_grande <- componentes[[1]]
+karate <- componente_grande %>% as_tbl_graph() %>%
+  activate(edges) %>% 
+  mutate(weights = 1) %>% 
+  activate(nodes) %>% 
+  mutate(importancia_betweenness = centrality_betweenness()) %>%
+  mutate(importancia_closeness = centrality_closeness()) %>%
+  mutate(importancia_eigen = centrality_eigen())
+    
+```
+
+
+```{r}
+nodos_imp <- karate %>% activate(nodes) %>% as_tibble() %>%
+    arrange(desc(importancia_betweenness))
+nodos_imp
+qplot(pull(nodos_imp, importancia_betweenness))
+```
+
+
+```{r}
+nodos_imp <- karate %>% activate(nodes) %>% as_tibble() %>%
+    arrange(desc(importancia_closeness))
+nodos_imp
+qplot(pull(nodos_imp, importancia_closeness))
+```
+
+
+```{r}
+nodos_imp <- karate %>% activate(nodes) %>% as_tibble() %>%
+    arrange(desc(importancia_eigen))
+nodos_imp
+qplot(pull(nodos_imp, importancia_eigen))
+```
+
+##Betweeness
+
+```{r, fig.width = 12, fig.height = 12}
+ggraph(karate, layout = "auto") +
+  geom_edge_link(alpha=0.2) +
+  geom_node_point(aes(size = importancia_betweenness, colour = importancia_betweenness)) +
+  geom_node_text(aes(label = name), nudge_y = 0.2, size=4) +
+  theme_graph(base_family = 'sans')
+```
+
+## Closeness
+
+```{r, fig.width = 12, fig.height = 12}
+ggraph(karate, layout = "auto") +
+  geom_edge_link(alpha=0.2) +
+  geom_node_point(aes(size = importancia_closeness, colour = importancia_closeness)) +
+  geom_node_text(aes(label = name), nudge_y = 0.2, size=4) +
+  theme_graph(base_family = 'sans')
+```
+
+
+## Eigen
+
+```{r, fig.width = 12, fig.height = 12}
+ggraph(karate, layout = "auto") +
+  geom_edge_link(alpha=0.2) +
+  geom_node_point(aes(size = importancia_eigen, colour = importancia_eigen)) +
+  geom_node_text(aes(label = name), nudge_y = 0.2, size=4) +
+  theme_graph(base_family = 'sans')
+```
