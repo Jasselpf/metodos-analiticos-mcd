@@ -2,6 +2,12 @@
 title: "Modelos de lenguaje"
 output: html_document
 ---
+```{r, echo=FALSE}
+library(tidyverse)
+#install.packages("tidytext")
+library(tidytext)
+```
+
 
 1. (De nuestra referencia de Jurafsky). Considera el siguiente corpus:
 <s> I am Sam </s>
@@ -11,20 +17,219 @@ output: html_document
 
 Con este corpus, 
 
+```{r}
+normalizar <- function(texto, vocab = NULL){
+  texto <- gsub("\\.\\s*$", "  _ss_", texto)
+  texto <- tolower(texto)
+  texto <- gsub("\\s+", " ", texto)
+  texto <- gsub("\\.[^0-9]", " _ss_ _s_ ", texto)
+  texto <- gsub("[«»]", "", texto) 
+  texto <- gsub(";", " _punto_coma_ ", texto) 
+  texto <- gsub("\\:", " _dos_puntos_ ", texto) 
+  texto <- gsub("\\,[^0-9]", " _coma_ ", texto) 
+  texto <- paste("_s_ _s_", texto)
+  texto
+}
+restringir_vocab <- function(texto, vocab = vocab){
+  texto_v <- strsplit(texto, " ")
+  texto_v <- lapply(texto_v, function(x){
+    en_vocab <- x %in% vocab
+    x[!en_vocab] <- "_unk_"
+    x
+  })
+  texto <- sapply(texto_v, function(x){
+      paste(x, collapse = " ")
+  })
+  texto
+}
+corpus_mini <- c("I am Sam. Sam I am. I am Sam.  I do not like green eggs and Sam.  " )
+normalizar(corpus_mini)
+```
+
+
 - Usa un modelo de unigramas para calcular $P(Sam)$. Recuerda contar los <s> y </s> como tokens.
+
+```{r}
+ejemplo <- data_frame(txt = corpus_mini) %>%
+                mutate(id = row_number()) %>%
+                mutate(txt = normalizar(txt)) 
+bigrams_ejemplo <- ejemplo %>% 
+                   unnest_tokens(bigramas, txt, token = "ngrams", 
+                                 n = 1) %>%
+                   group_by(bigramas) %>% tally()
+knitr::kable(bigrams_ejemplo)
+```
+```{r}
+proba_unigrama <- function(palabra){
+    n_palabra <- filter(bigrams_ejemplo, bigramas == palabra)
+    m <- n_palabra$n
+    N <- sum(bigrams_ejemplo$n)
+    return(m/N)
+}
+```
+
+```{r}
+proba_unigrama("sam")
+proba_unigrama("_s_")
+```
+
 
 - Usa un modelo de bigramas para calcular $P(Sam | am)$ y
 $P(I | <s>)$. 
+
+```{r}
+ejemplo <- data_frame(txt = corpus_mini) %>%
+                mutate(id = row_number()) %>%
+                mutate(txt = normalizar(txt)) 
+bigrams_ejemplo <- ejemplo %>% 
+                   unnest_tokens(bigramas, txt, token = "ngrams", 
+                                 n = 2) %>%
+                   group_by(bigramas) %>% tally()
+knitr::kable(bigrams_ejemplo)
+```
+
+```{r}
+proba_unigrama("am sam")
+proba_unigrama("_s_ i")
+```
+
 
 
 2. Usando los datos de clase (notas de periódico), 
 calcula las log probabilidades de las siguientes frases bajo los modelos
 de unigramas, bigramas y trigramas:
 
+```{r}
+library(tidyverse)
+periodico <- read_lines(file='../../datos/noticias/Es_Newspapers.txt',
+                        progress = FALSE)
+```
+
+```{r}
+length(periodico)
+periodico_df <- data_frame(txt = periodico) %>%
+                mutate(id = row_number()) %>%
+                mutate(txt = normalizar(txt)) 
+```
+
+
 - El presidente dijo que sí.
 - El dijo presidente que sí.
 - El presidente dijo algo extraño.
 
+
+```{r}
+conteo_ngramas <- function(corpus, n = 1, vocab_df = NULL){
+  token_nom <- paste0('w_n_', rev(seq(1:n)) - 1)
+  token_cond <- syms(token_nom[-length(token_nom)])
+  ngramas_df <- corpus %>% 
+                unnest_tokens(ngrama, txt, token = "ngrams", n = n) 
+  frec_ngramas <- ngramas_df %>% group_by(ngrama) %>%
+                  summarise(num = length(ngrama)) %>%
+                  separate(ngrama, token_nom, sep=" ") %>%
+                  group_by(!!!token_cond) %>%
+                  mutate(denom = sum(num)) %>%
+                  ungroup %>%
+                  mutate(log_p = log(num) - log(denom))
+  frec_ngramas
+}
+
+mod_uni <- conteo_ngramas(periodico_df, n = 1)
+mod_bi  <- conteo_ngramas(periodico_df, n = 2)
+mod_tri <- conteo_ngramas(periodico_df, n = 3)
+```
+
+
+```{r}
+n_gramas <- list(unigramas = mod_uni,
+                 bigramas  = mod_bi,
+                 trigramas = mod_tri)
+
+log_prob <- function(textos, n_gramas, n = 2, laplace = FALSE, delta = 0.001, vocab_env = NULL){
+  df <- data_frame(id = 1:length(textos), txt = textos) %>%
+         mutate(txt = normalizar(txt))
+  if(!is.null(vocab_env)){
+    df <- df %>% mutate(txt_u = map_chr(txt, ~restringir_vocab(.x, vocab = vocab_env))) %>% 
+    select(id, txt_u) %>% rename(txt = txt_u)
+  }
+  token_nom <- paste0('w_n_', rev(seq(1:n)) - 1)
+  df_tokens <- df %>% group_by(id) %>%
+                unnest_tokens(ngrama, txt, 
+                token = "ngrams", n = n) %>%
+                separate(ngrama, token_nom, " ") %>%
+                left_join(n_gramas[[n]], by = token_nom)
+  if(laplace){
+    V <- nrow(n_gramas[[1]])
+    log_probs <- log(df_tokens[["num"]] + delta) - log(df_tokens[["denom"]] + delta*V )
+    log_probs[is.na(log_probs)] <- log(1/V)
+  } else {
+    log_probs <- df_tokens[["log_p"]]
+  }
+  log_probs <- split(log_probs, df_tokens$id)
+  sapply(log_probs, mean)
+}
+```
+
+Log probabilidades
+```{r}
+textos <- c("El presidente dijo que sí.",
+            "El dijo presidente que sí.",
+           "El presidente dijo algo extraño.")
+```
+
+```{r}
+log_prob(textos, n_gramas, n = 1)
+```
+
+```{r}
+log_prob(textos, n_gramas, n = 2)
+```
+
+
+```{r}
+log_prob(textos, n_gramas, n = 3)
+```
+
 Explica para qué modelos obtienes NA para la segunda frase. ¿Por qué crees que pasa eso?  Para la tercera frase, ¿qué modelos devuelven NA? ¿Por qué?
 
+```{r}
+n <- 2
+textos <- "El dijo presidente que sí."
+df <- data_frame(id = 1:length(textos), txt = textos) %>%
+         mutate(txt = normalizar(txt))
+token_nom <- paste0('w_n_', rev(seq(1:n)) - 1)
+df_tokens <- df %>% group_by(id) %>%
+                unnest_tokens(ngrama, txt, 
+                token = "ngrams", n = n) %>%
+                separate(ngrama, token_nom, " ") %>%
+                left_join(n_gramas[[n]], by = token_nom)
+df_tokens
+```
 
+```{r}
+n <- 3
+textos <- "El dijo presidente que sí."
+df <- data_frame(id = 1:length(textos), txt = textos) %>%
+         mutate(txt = normalizar(txt))
+token_nom <- paste0('w_n_', rev(seq(1:n)) - 1)
+df_tokens <- df %>% group_by(id) %>%
+                unnest_tokens(ngrama, txt, 
+                token = "ngrams", n = n) %>%
+                separate(ngrama, token_nom, " ") %>%
+                left_join(n_gramas[[n]], by = token_nom)
+df_tokens
+```
+
+```{r}
+n <- 3
+textos <- "El presidente dijo algo extraño."
+df <- data_frame(id = 1:length(textos), txt = textos) %>%
+         mutate(txt = normalizar(txt))
+token_nom <- paste0('w_n_', rev(seq(1:n)) - 1)
+df_tokens <- df %>% group_by(id) %>%
+                unnest_tokens(ngrama, txt, 
+                token = "ngrams", n = n) %>%
+                separate(ngrama, token_nom, " ") %>%
+                left_join(n_gramas[[n]], by = token_nom)
+df_tokens
+```
