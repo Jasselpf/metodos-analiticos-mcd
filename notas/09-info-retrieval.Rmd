@@ -253,6 +253,7 @@ vs
 corpus <- VCorpus(vs)
 td_sparse <- TermDocumentMatrix(corpus, 
       control = list(weighting = weightTf, wordLengths = c(2, Inf))) 
+#wordLenghts sirve para eliminar palabras muy cortas, en este caso deben ser mayores de 2
 inspect(td_sparse)
 ```
 
@@ -373,6 +374,7 @@ solución:
 
 Ahora tenemos que considerar que los términos que ocurren poco (cuando coinciden con nuestras búsquedas), son mejores para discriminar que términos que ocurren mucho, de modo que distintos términos tienen que tener distintos pesos al ordenar los resultados.
 
+**NOTE** $df_i$ es el número de docuementos donde aparece el término $i$
 Si $df_i$ es el número de veces que aparece un término $i$ en la colección de documentos,  y $N$ es el total de documentos en la colección, definimos:
 la **frecuencia inversa de documentos** como
 $$idf_i = log\left(\frac{N}{df_i}\right)$$
@@ -499,6 +501,7 @@ encontrar resultados relevantes;
 ```{r}
 stemDocument("investigación operaciones", language = "spanish")
 stemDocument("operar investigadores", language = "spanish")
+stemDocument("prendía día", language = "spanish")
 ```
 
 **Observación**: 
@@ -686,7 +689,7 @@ latentes importantes (normalmente utilizaríamos orden de cientos para similitud
 ```{r}
 library(irlba)
 td_sparse <- sparseMatrix(i = td_noticias_tfidf$i, j = td_noticias_tfidf$j, x = td_noticias_tfidf$v)
-noticias_svd <- irlba(td_sparse, nv = 5, nu = 5)
+noticias_svd <- irlba(td_sparse, nv = 5, nu = 5) #algoritmo para aproximar svd
 ```
 
 Por ejemplo, los términos:
